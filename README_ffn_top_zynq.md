@@ -317,7 +317,7 @@ requires **256 beats** of 64 bits (4 elements per beat). The fetch stage
 re-assembles the tile from these beats into the 512-bit `weight_tile_buf`.
 
 ## Source Files
-
+All the modules are written together.
 ```
 rtl/defines.v           — Common macros
 rtl/adder_tree.v        — Pipelined adder tree (5 levels for M=32)

@@ -284,35 +284,9 @@ Inner iteration with NUM_SUB=3:
 | BRAM readout | Accum. FSM | Accum. FSM | **Serializer FSM** |
 | Target | UltraScale+ | Mid-range FPGA | **Zynq-7000** |
 
-## Synthesis
 
-```bash
-vivado -mode batch -source vivado_synth_zynq.tcl
-```
 
-The script targets `xc7z045ffv900-1` with:
-- `FLATTEN_HIERARCHY none` (prevents Vivado BelGrid crash)
-- `synth.maxNumOfProcessedInstances 5000`
 
-## Simulation
-
-```bash
-# D=16, M=8, NUM_COLS=4 (4 beats/tile, serializer verification)
-iverilog -g2005-sv -o ffn_zynq_tb \
-    rtl/defines.v rtl/adder_tree.v rtl/mul_col.v rtl/bram_dp.v \
-    rtl/axi_read_master.v rtl/fetch_addr_gen.v rtl/tm_proj_stage.v \
-    rtl/relu_stage.v rtl/accumulator.v rtl/ffn_top_zynq.v \
-    tb/tb_ffn_zynq.v
-vvp ffn_zynq_tb
-```
-
-Expected output:
-```
-*** ALL 16 PASS (BRAM snoop) ***
-*** ALL 16 PASS (Serializer) ***
-*** ALL 64 ReLU PASS ***
-*** Beat count CORRECT: 8 (=2 tiles × 4 beats) ***
-```
 
 ## Important Implementation Notes
 

@@ -193,41 +193,8 @@ RD_IDLE → RD_ISSUE → RD_RELAY → RD_CAPTURE → (next or RD_DONE)
 
 64 tiles × ~3 cycles/tile ≈ **192 cycles** for full output readout.
 
-## Synthesis
 
-```bash
-vivado -mode batch -source vivado_synth.tcl
-```
 
-The script uses `ffn_top` as top. To use the wrapper:
-```tcl
-set_property top ffn_top_2048 [current_fileset]
-```
-
-Or override NUM_COLS on ffn_top:
-```tcl
-set_property generic {D=2048 M=32 NUM_COLS=16 DATA_W=16 AXI_DATA_W=512 AXI_ADDR_W=32} [current_fileset]
-```
-
-## Simulation (scaled down)
-
-```bash
-# D=8, M=4 (fast smoke test)
-iverilog -g2005-sv -o ffn_tb \
-    rtl/defines.v rtl/adder_tree.v rtl/mul_col.v rtl/bram_dp.v \
-    rtl/axi_read_master.v rtl/fetch_addr_gen.v rtl/tm_proj_stage.v \
-    rtl/relu_stage.v rtl/accumulator.v rtl/ffn_top.v \
-    tb/tb_ffn_complete.v
-vvp ffn_tb
-
-# D=32, M=16 (exercises NUM_SUB=1 for NUM_COLS=16)
-iverilog -g2005-sv -o ffn_2048_tb \
-    rtl/defines.v rtl/adder_tree.v rtl/mul_col.v rtl/bram_dp.v \
-    rtl/axi_read_master.v rtl/fetch_addr_gen.v rtl/tm_proj_stage.v \
-    rtl/relu_stage.v rtl/accumulator.v rtl/ffn_top.v \
-    tb/tb_ffn_2048.v
-vvp ffn_2048_tb
-```
 
 ## Source Files
 

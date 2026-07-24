@@ -1,5 +1,5 @@
 //============================================================================
-// defines.v — Common parameters and macros for the Pipelined FFN
+//  Common parameters and macros for the Pipelined FFN
 //============================================================================
 // Default parameters:
 //   D        = 256   : Input/output vector dimension
@@ -26,7 +26,7 @@
 `define WEIGHT_IDX(flat, k, j, M, DW) flat[(k*(M)+(j))*(DW) +: (DW)]
 
 //============================================================================
-// axi_read_master.v — Simplified AXI4 Read Master
+//  Simplified AXI4 Read Master
 //============================================================================
 // Accepts a read request (base address + burst length), issues AXI4 AR
 // channel transactions, collects R channel data, and presents results
@@ -45,11 +45,11 @@
 //============================================================================
 
 module axi_read_master #(
-    parameter AXI_DATA_W = 128,
-    parameter AXI_ADDR_W = 32
+    parameter AXI_DATA_W = 128,        // AXI data bus width
+    parameter AXI_ADDR_W = 32           // AXI address bus width
 )(
-    input  wire                          clk,
-    input  wire                          rst_n,
+    input  wire                          clk,            // Reference clock signal
+    input  wire                          rst_n,           // Reset signal 
 
     // ---- Request interface (from fetch stage) ----
     input  wire [AXI_ADDR_W-1:0]        req_addr,      // Burst start address
@@ -82,54 +82,54 @@ module axi_read_master #(
     // -------------------------------------------------------------------
     // State machine
     // -------------------------------------------------------------------
-    localparam S_IDLE    = 2'd0;
+    localparam S_IDLE    = 2'd0;    // Idle state
     localparam S_AR      = 2'd1;  // Driving AR channel
     localparam S_R       = 2'd2;  // Receiving R channel
 
-    reg [1:0] state;
+    reg [1:0] state;              //state register
 
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            state    <= S_IDLE;
-            arvalid  <= 1'b0;
-            rready   <= 1'b0;
-            araddr   <= '0;
-            arlen    <= '0;
-            arsize   <= '0;
-            arburst  <= 2'b01; // INCR
+    always @(posedge clk or negedge rst_n) begin         
+        if (!rst_n) begin            // When reset is applied
+            state    <= S_IDLE;        // state = Idle state
+            arvalid  <= 1'b0;         // Address valid signal is reset
+            rready   <= 1'b0;        // Data ready signal is reset
+            araddr   <= '0;            // Read address is reset to 0, from where the data reading would start
+            arlen    <= '0;            // Address length is reset to 0
+            arsize   <= '0;            // Address size is reset to 0
+            arburst  <= 2'b01; // Increment burst length by 1
         end else begin
             case (state)
-                S_IDLE: begin
-                    arvalid <= 1'b0;
+                S_IDLE: begin                // Idle state
+                    arvalid <= 1'b0;            // Valid ready handshake signals are reset
                     rready  <= 1'b0;
-                    if (req_valid) begin
-                        araddr   <= req_addr;
-                        arlen    <= req_len;
-                        arsize   <= req_size;
-                        arburst  <= 2'b01; // INCR burst
-                        arvalid  <= 1'b1;
-                        state    <= S_AR;
+                    if (req_valid) begin            // If valid request is found
+                        araddr   <= req_addr;        // AR channel address = required address
+                        arlen    <= req_len;          // AR channel length = required length
+                        arsize   <= req_size;         //AR channel size = required size
+                        arburst  <= 2'b01;             // Inrease AR channel burst by 1
+                        arvalid  <= 1'b1;            // AR channel valid is set to 1
+                        state    <= S_AR;            // Next state = AXI AR(address read) state
                     end
                 end
 
-                S_AR: begin
-                    if (arready && arvalid) begin
-                        arvalid <= 1'b0;
-                        rready  <= 1'b1;
-                        state   <= S_R;
+                S_AR: begin                            // AXI address read state
+                    if (arready && arvalid) begin      // If arready and arvalid is high   
+                        arvalid <= 1'b0;                // Make arvalid = 0 to preserve the address
+                        rready  <= 1'b1;                // rready = 1 to ensure the FSM is ready to read data
+                        state   <= S_R;                // Next state = AXI R(data read) state
                     end
                 end
 
-                S_R: begin
-                    if (rvalid && rready) begin
-                        if (rlast) begin
-                            rready <= 1'b0;
-                            state  <= S_IDLE;
+                S_R: begin                            // AXI data read state
+                    if (rvalid && rready) begin        // If rvalid and rready are both high
+                        if (rlast) begin                // and rlast is high, idicating rdata is finished
+                            rready <= 1'b0;                // rready is reset to 0, as the data has been read completely
+                            state  <= S_IDLE;            // Next state = Idle state
                         end
                     end
                 end
 
-                default: state <= S_IDLE;
+                default: state <= S_IDLE; // The default state is idle
             endcase
         end
     end
@@ -138,14 +138,14 @@ module axi_read_master #(
     assign req_ready = (state == S_IDLE);
 
     // Response data: directly from AXI R channel
-    assign resp_data  = rdata;
-    assign resp_last  = rlast;
-    assign resp_valid = rvalid && (state == S_R);
+    assign resp_data  = rdata;                        // Response data = rdata
+    assign resp_last  = rlast;                        // Response last = rlast
+    assign resp_valid = rvalid && (state == S_R);       // Response valid is high only when rvalid is high and the state is AXI data read state
 
 endmodule
 
 //============================================================================
-// bram_dp.v — Simple Dual-Port BRAM (1 write port, 1 read port)
+// Simple Dual-Port BRAM (1 write port, 1 read port)
 //============================================================================
 // Port A: Write only
 // Port B: Read only (synchronous read, 1-cycle latency)
@@ -196,7 +196,7 @@ endmodule
 
 
 //============================================================================
-// bram_dp_wide — Wide-word Dual-Port BRAM for tile storage
+//  Wide-word Dual-Port BRAM for tile storage
 //============================================================================
 // Stores one tile per address (word width = TILE_SIZE × DATA_W)
 // This allows reading/writing an entire 1×M tile in one cycle.
@@ -248,7 +248,7 @@ module bram_dp_wide #(
 endmodule
 
 //============================================================================
-// adder_tree.v — Parameterized Pipelined Adder Tree (Efficient)
+// Parameterized Pipelined Adder Tree (Efficient)
 //============================================================================
 // Reduces N input values to a single sum using a binary tree.
 //
@@ -278,7 +278,7 @@ module adder_tree #(
     output wire                        valid_out
 );
 
-    localparam LEVELS = $clog2(N);
+    localparam LEVELS = $clog2(N); // Number of adder tree stages
 
     // -------------------------------------------------------------------
     // Level 0: sign-extend inputs from IN_W to (IN_W + LEVELS)
@@ -408,13 +408,8 @@ module adder_tree #(
 endmodule
 
 //============================================================================
-// fetch_addr_gen.v — Stage 1: Fetch & Address Generation (REVISED)
+//  Stage 1: Fetch & Address Generation 
 //============================================================================
-// FIX: Registered the AXI request valid signal so that request data
-// (addr, len, size) is guaranteed stable when valid is asserted.
-// The combinational valid led to a one-cycle race where the AXI master
-// captured stale address/size data.
-//
 // Two-phase operation:
 //   UP_PHASE   : Fetches input tiles + up-projection weight tiles → Stage 2
 //   DOWN_PHASE : Reads ReLU tiles from local BRAM + fetches down-projection
@@ -504,21 +499,21 @@ module fetch_addr_gen #(
     // -------------------------------------------------------------------
     // State machine
     // -------------------------------------------------------------------
-    localparam S_IDLE           = 4'd0;
-    localparam S_UP_REQ_INPUT   = 4'd1;
-    localparam S_UP_WAIT_INPUT  = 4'd2;
-    localparam S_UP_REQ_WEIGHT  = 4'd3;
-    localparam S_UP_WAIT_WEIGHT = 4'd4;
-    localparam S_UP_SEND        = 4'd5;
-    localparam S_DOWN_REQ_RELU  = 4'd6;
-    localparam S_DOWN_RELAY     = 4'd7;  // Wait for BRAM read latency
-    localparam S_DOWN_WAIT_RELU = 4'd8;
-    localparam S_DOWN_REQ_WGT   = 4'd9;
-    localparam S_DOWN_WAIT_WGT  = 4'd10;
-    localparam S_DOWN_SEND      = 4'd11;
-    localparam S_DONE           = 4'd12;
+    localparam S_IDLE           = 4'd0;        // Idle state
+    localparam S_UP_REQ_INPUT   = 4'd1;        // Up projection input request state
+    localparam S_UP_WAIT_INPUT  = 4'd2;        // Up projection wait state for input arrival
+    localparam S_UP_REQ_WEIGHT  = 4'd3;        // Up projection request state for weight
+    localparam S_UP_WAIT_WEIGHT = 4'd4;        // Up projection wait state for weight arrival
+    localparam S_UP_SEND        = 4'd5;        // input tile and weight tile send state
+    localparam S_DOWN_REQ_RELU  = 4'd6;        // Down projection input request state ( from ReLU BRAM)
+    localparam S_DOWN_RELAY     = 4'd7;        // Wait for BRAM read latency
+    localparam S_DOWN_WAIT_RELU = 4'd8;        //  Down projection wait state for input arrival ( from ReLU BRAM)
+    localparam S_DOWN_REQ_WGT   = 4'd9;        // Down projection weight tile request state
+    localparam S_DOWN_WAIT_WGT  = 4'd10;        // Down projection wait state for weight arrival
+    localparam S_DOWN_SEND      = 4'd11;         // Input tile and down tile send state
+    localparam S_DONE           = 4'd12;        // Done state
 
-    reg [3:0] state;
+    reg [3:0] state;                            // State register
 
     // -------------------------------------------------------------------
     // Iteration counters
@@ -546,16 +541,10 @@ module fetch_addr_gen #(
 
     // -------------------------------------------------------------------
     // Main state machine
-    // -------------------------------------------------------------------
-    // KEY FIX: Request signals (addr, len, size, valid) are all set with
-    // non-blocking assignments BEFORE the AXI master can see them.
     // The pattern is:
     //   Cycle N  : Set req_addr/len/size AND state <= REQ_STATE
     //   Cycle N+1: Request signals are now stable; assert req_valid
     //   Cycle N+2: AXI master sees valid=1 with correct data
-    //
-    // We use a registered req_valid that is asserted one cycle after
-    // entering a request state, ensuring the request data is stable.
     // -------------------------------------------------------------------
 
     always @(posedge clk or negedge rst_n) begin
@@ -819,10 +808,10 @@ module fetch_addr_gen #(
 endmodule
 
 //============================================================================
-// up_projection.v — Stage 2: Up Projection (d × 4d)
+//  Stage 2: Up Projection (d × 4d)
 //============================================================================
 // Computes one partial product per cycle:
-//   partial[j] = Σ_{k=0}^{M-1} input_tile[k] * weight_tile[k][j], j=0..M-1
+//   partial[j] = Sum of {k=0}^{M-1} input_tile[k] * weight_tile[k][j], j=0..M-1
 //
 // Hardware:
 //   - M×M parallel signed multipliers (one per (k,j) pair)
@@ -910,7 +899,7 @@ module up_projection #(
             adder_tree #(
                 .N     (M),
                 .IN_W  (PROD_W),
-                .PIPE  (1)     // *** PIPELINED for M=32 timing closure ***
+                .PIPE  (1)     //  PIPELINED for M=32 timing closure 
             ) u_adder_tree (
                 .clk       (clk),
                 .rst_n     (rst_n),
@@ -1031,7 +1020,7 @@ module up_projection #(
 endmodule
 
 //============================================================================
-// relu_stage.v — Stage 3: ReLU Activation
+// Stage 3: ReLU Activation
 //============================================================================
 // Applies ReLU (max(0, x)) element-wise to each element of the 1×M tile.
 // All M elements are processed in parallel using M comparators.
@@ -1125,7 +1114,7 @@ module relu_stage #(
 endmodule
 
 //============================================================================
-// down_projection.v — Stage 4: Down Projection (4d × d)
+//  Stage 4: Down Projection (4d × d)
 //============================================================================
 // Same structure as up_projection but:
 //   - Inner loop: NUM_TILES_4D iterations
@@ -1321,7 +1310,7 @@ module down_projection #(
 endmodule
 
 //============================================================================
-// accumulator.v — Stage 5: Output Accumulation (REVISED v2)
+//  Stage 5: Output Accumulation 
 //============================================================================
 // Receives completed 1×M tiles from the Down Projection stage.
 // Decodes the tile_col index to determine where in the 1×D output
@@ -1528,16 +1517,6 @@ endmodule
 // Integrates all five pipeline stages with valid/ready handshaking,
 // AXI4 read interface to external memory, and local BRAMs for
 // ReLU output buffering and final output storage.
-//
-// Architecture:
-//   ┌──────────┐    ┌──────────────┐    ┌──────┐    ┌────────────────┐    ┌─────────────┐
-//   │ Fetch &  │───▶│ Up Projection│───▶│ ReLU │───▶│ Down Projection│───▶│ Accumulator │
-//   │ Addr Gen │    │ (M×M muls +  │    │      │    │ (M×M muls +    │    │ (1×D buffer)│
-//   │          │    │  adder trees) │    │      │    │  adder trees)  │    │             │
-//   └──────────┘    └──────────────┘    └──────┘    └────────────────┘    └─────────────┘
-//        │                                                          ▲
-//        └──────── AXI4 to External Memory ──────────────────────────┘
-//
 //   ReLU BRAM connects Stage 3 output → Stage 4 input (via fetch stage reads)
 //   Output BRAM stores the final 1×D result
 //
@@ -1910,7 +1889,7 @@ module ffn_top #(
     );
 
     // -------------------------------------------------------------------
-    // Output port — driven directly by accumulator (latency-aligned)
+    // Output port — driven directly by accumulator 
     // -------------------------------------------------------------------
     // output_tile_data, output_tile_addr, output_tile_valid are now
     // registered outputs from the accumulator module, properly aligned
@@ -1920,9 +1899,9 @@ endmodule
 
 
 //============================================================================
-// ffn_top_2048.v — Production Configuration: D=2048, M=32
+//  D=2048, M=32
 //============================================================================
-// Wrapper around ffn_top with production parameters.
+// Wrapper around ffn_top with  parameters.
 //
 // Key parameter choices:
 //   D          = 2048    : Full input/output dimension
@@ -1932,13 +1911,9 @@ endmodule
 //                         (1 beat per input tile, 32 beats per weight tile)
 //   AXI_ADDR_W = 32      : 4 GB address space
 //
-// Resource estimates (Xilinx UltraScale+):
+// Resource estimates :
 //   DSP48E2    : 2048  (32×32 multipliers × 2 projection stages)
-//   BRAM (36Kb): ~24   (ReLU BRAM: 16KB + Output BRAM: 4KB + pipeline regs)
-//   LUT        : ~150K  (adder trees, control logic, pipeline registers)
-//   FF         : ~100K  (pipeline registers, accumulators, control state)
-//
-// External memory: ~64 MB (4KB input + 32MB W_up + 32MB W_down)
+//  DRAM size : ~64 MB (4KB input + 32MB W_up + 32MB W_down)
 //============================================================================
 
 module ffn_top_2048 (

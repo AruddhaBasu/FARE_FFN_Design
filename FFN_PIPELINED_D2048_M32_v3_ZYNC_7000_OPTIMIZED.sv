@@ -1,5 +1,5 @@
 //============================================================================
-// defines.v - Common parameters and macros for the Pipelined FFN
+// Common parameters and macros for the Pipelined FFN
 //============================================================================
 // Default parameters:
 //   D        = 256   : Input/output vector dimension
@@ -25,10 +25,10 @@
 // weight[k][j] = weight_flat[(k*M+j)*DW +: DW]
 `define WEIGHT_IDX(flat, k, j, M, DW) flat[(k*(M)+(j))*(DW) +: (DW)]
 //============================================================================
-// mul_col.v - Multiply-Add Column: M multipliers + 1 adder tree
+// Multiply-Add Column: M multipliers + 1 adder tree
 //============================================================================
 // Computes one output element of a tile partial product:
-//   result = Σ_{k=0}^{M-1} input_tile[k] * weight_col[k]
+//   result = Sum of {k=0}^{M-1} input_tile[k] * weight_col[k]
 //
 // This hierarchical module replaces the flat M×M multiplier array.
 // Instead of one massive 32768-bit product bus, we have M independent
@@ -37,8 +37,6 @@
 // Benefits:
 //   - No M*M*PROD_W flat bus (was 32768 bits for M=32)
 //   - Only M*DATA_W weight input (per column, not the full tile)
-//   - Vivado can place & route each column independently
-//   - Fixes HDConfig::lookup() BelGrid crash
 //============================================================================
 
 module mul_col #(
@@ -106,7 +104,7 @@ endmodule
 
 
 //============================================================================
-// axi_read_master.v - Simplified AXI4 Read Master
+// Simplified AXI4 Read Master
 //============================================================================
 // Accepts a read request (base address + burst length), issues AXI4 AR
 // channel transactions, collects R channel data, and presents results
@@ -122,6 +120,7 @@ endmodule
 // Parameters:
 //   AXI_DATA_W : Width of the AXI data bus (e.g., 128)
 //   AXI_ADDR_W : Width of the AXI address bus (e.g., 32)
+//   Unchanged form the fully parallel design
 //============================================================================
 
 module axi_read_master #(
@@ -186,7 +185,7 @@ module axi_read_master #(
                         araddr   <= req_addr;
                         arlen    <= req_len;
                         arsize   <= req_size;
-                        arburst  <= 2'b01; // INCR burst
+                        arburst  <= 2'b01; 
                         arvalid  <= 1'b1;
                         state    <= S_AR;
                     end
@@ -225,7 +224,7 @@ module axi_read_master #(
 endmodule
 
 //============================================================================
-// bram_dp.v - Simple Dual-Port BRAM (1 write port, 1 read port)
+// Simple Dual-Port BRAM (1 write port, 1 read port)
 //============================================================================
 // Port A: Write only
 // Port B: Read only (synchronous read, 1-cycle latency)
@@ -276,7 +275,7 @@ endmodule
 
 
 //============================================================================
-// bram_dp_wide - Wide-word Dual-Port BRAM for tile storage
+// Wide-word Dual-Port BRAM for tile storage
 //============================================================================
 // Stores one tile per address (word width = TILE_SIZE × DATA_W)
 // This allows reading/writing an entire 1×M tile in one cycle.
@@ -328,7 +327,7 @@ module bram_dp_wide #(
 endmodule
 
 //============================================================================
-// adder_tree.v - Parameterized Pipelined Adder Tree (Vivado-Safe)
+//Parameterized Pipelined Adder Tree 
 //============================================================================
 // Reduces N inputs to a single sum using a binary tree.
 //
@@ -380,7 +379,7 @@ module adder_tree #(
     // ===================================================================
 
     // We need intermediate buses between levels.
-    // For Vivado compatibility, we declare them with maximum width
+    //  We declare them with maximum width
     // and only use the first (count * OUT_W) bits at each level.
 
     // Stage buses: stage_l_out has (N >> (l+1)) entries padded to OUT_W
@@ -391,9 +390,7 @@ module adder_tree #(
 
     // Chain: stage0 → (level 0 logic) → stage1 → (level 1 logic) → ... → result
 
-    // For clean Vivado synthesis, we build a Generate chain where
-    // each level instantiates its own local wires and regs.
-
+   
     wire [N*OUT_W-1:0]  level_bus [0:LEVELS];
     reg  [N*OUT_W-1:0]  level_pipe [0:LEVELS];
     reg                  level_valid_pipe [0:LEVELS];
@@ -483,13 +480,7 @@ module adder_tree #(
 endmodule
 
 //============================================================================
-// fetch_addr_gen.v - Stage 1: Fetch & Address Generation (REVISED)
-//============================================================================
-// FIX: Registered the AXI request valid signal so that request data
-// (addr, len, size) is guaranteed stable when valid is asserted.
-// The combinational valid led to a one-cycle race where the AXI master
-// captured stale address/size data.
-//
+// Stage 1: Fetch & Address Generation 
 // Two-phase operation:
 //   UP_PHASE   : Fetches input tiles + up-projection weight tiles → Stage 2
 //   DOWN_PHASE : Reads ReLU tiles from local BRAM + fetches down-projection
@@ -621,9 +612,6 @@ module fetch_addr_gen #(
 
     // -------------------------------------------------------------------
     // Main state machine
-    // -------------------------------------------------------------------
-    // KEY FIX: Request signals (addr, len, size, valid) are all set with
-    // non-blocking assignments BEFORE the AXI master can see them.
     // The pattern is:
     //   Cycle N  : Set req_addr/len/size AND state <= REQ_STATE
     //   Cycle N+1: Request signals are now stable; assert req_valid
@@ -901,10 +889,10 @@ endmodule
 // module that processes NUM_COLS output columns per sub-cycle instead of
 // all M columns at once. This trades DSP utilization for clock cycles.
 //
-// With NUM_COLS=14, M=32:
-//   DSP per stage: 14×32 = 448   (vs 1024 for full parallel)
-//   Sub-cycles per inner iteration: ceil(32/14) = 3
-//   Throughput: 1/3× of full parallel
+// With NUM_COLS=8, M=32:
+//   DSP per stage: 8×32 = 256   (vs 1024 for full parallel)
+//   Sub-cycles per inner iteration: ceil(32/8) = 4
+//   Throughput: 1/4× of full parallel
 //
 // The weight_tile is latched on entry and held stable across sub-cycles.
 // In each sub-cycle, a different group of NUM_COLS weight columns is
@@ -918,7 +906,7 @@ endmodule
 module tm_proj_stage #(
     parameter D         = 2048,
     parameter M         = 32,
-    parameter NUM_COLS  = 14,       // Parallel columns (DSP = NUM_COLS × M per stage)
+    parameter NUM_COLS  = 8,       // Parallel columns (DSP = NUM_COLS × M per stage)
     parameter MAX_INNER = 256,      // Max inner iterations = max(D/M, 4D/M)
     parameter DATA_W    = 16
 )(
@@ -1165,7 +1153,7 @@ module tm_proj_stage #(
 endmodule
 
 //============================================================================
-// relu_stage.v - Stage 3: ReLU Activation
+// Stage 3: ReLU Activation
 //============================================================================
 // Applies ReLU (max(0, x)) element-wise to each element of the 1×M tile.
 // All M elements are processed in parallel using M comparators.
@@ -1260,7 +1248,7 @@ endmodule
 
 
 //============================================================================
-// accumulator.v - Stage 5: Output Accumulation (REVISED v2)
+//  Stage 5: Output Accumulation 
 //============================================================================
 // Receives completed 1×M tiles from the Down Projection stage.
 // Decodes the tile_col index to determine where in the 1×D output
@@ -1465,14 +1453,14 @@ endmodule
 
 
 //============================================================================
-// ffn_top_zynq.v - Zynq-7000 Optimized FFN Top Module
+//  Zynq-7000 Optimized FFN Top Module
 //============================================================================
 // Optimized for xc7z045ffv900-1 (900 DSP, 218K LUT, 362 IO, 545 BRAM36)
 //
 // Key optimizations vs ffn_top_2048:
 //   1. TIME-MULTIPLEXED PROJECTION: NUM_COLS=8 instead of M=32
-//      → DSP: 512 (fits!) vs 2048 (overflows to LUTs)
-//      → LUT: ~50K (fits!) vs 449K (overflows)
+//      → DSP: 512 (fits) vs 2048 (overflows to LUTs)
+//    
 //   2. NARROW AXI BUS: AXI_DATA_W=64 instead of 512
 //      → IOB: ~189 pins (fits!) vs 1085 (overflows)
 //   3. NARROW OUTPUT: 64-bit streamed output instead of 512-bit parallel

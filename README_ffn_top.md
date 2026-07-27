@@ -11,24 +11,6 @@ configuration but also the most resource-intensive.
 y = ReLU(x · W_up) · W_down
 ```
 
-## Module Hierarchy
-
-```
-ffn_top
-├── u_axi_read_master     (AXI4 read master, 512-bit data bus)
-├── u_fetch_addr_gen      (Stage 1: fetch tiles + address generation)
-├── u_up_projection       (Stage 2: tm_proj_stage, NUM_COLS=32)
-│   └── gen_col[0:31]
-│       └── u_mul_col     (32 multipliers + 1 pipelined adder tree each)
-├── u_relu_stage          (Stage 3: parallel ReLU)
-├── u_relu_bram           (256 × 512-bit BRAM for intermediate results)
-├── u_down_projection     (Stage 4: tm_proj_stage, NUM_COLS=32)
-│   └── gen_col[0:31]
-│       └── u_mul_col     (32 multipliers + 1 pipelined adder tree each)
-├── u_accumulator         (Stage 5: tile index decode + output BRAM write)
-└── u_output_bram         (64 × 512-bit BRAM for final output)
-```
-
 ## Parameters for D=2048, M=32
 
 | Parameter | Value | Description |
@@ -175,17 +157,3 @@ RD_IDLE → RD_ISSUE → RD_RELAY → RD_CAPTURE → (next RD_ISSUE or RD_DONE)
 
 
 
-## Source Files
-
-```
-rtl/defines.v           — Common macros
-rtl/adder_tree.v        — Pipelined adder tree (5 levels for M=32)
-rtl/mul_col.v           — Hierarchical 32 multipliers + 1 adder tree
-rtl/bram_dp.v           — Dual-port BRAM (wide-word variant)
-rtl/axi_read_master.v   — AXI4 read master (512-bit)
-rtl/fetch_addr_gen.v    — Two-phase tile fetch + address generation
-rtl/tm_proj_stage.v     — Time-multiplexed projection (NUM_COLS=32 → full parallel)
-rtl/relu_stage.v        — Parallel ReLU (32 comparators)
-rtl/accumulator.v       — Output accumulation + readout FSM (DISABLE_READOUT=0)
-rtl/ffn_top.v           — This module (top)
-```

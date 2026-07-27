@@ -883,7 +883,7 @@ endmodule
 
 
 //============================================================================
-// tm_proj_stage.v - Time-Multiplexed Projection Stage
+//  Time-Multiplexed Projection Stage
 //============================================================================
 // Replaces up_projection / down_projection with a single parameterized
 // module that processes NUM_COLS output columns per sub-cycle instead of

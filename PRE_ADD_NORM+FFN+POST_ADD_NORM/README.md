@@ -15,9 +15,9 @@ master for weight/parameter fetch.
 
 ```
                            ┌────────────────────────────────────────────┐
-   DRAM (AXI4-Full)        │  ffn_block_zynq  (D=2048, M=32, NUM_COLS)  │
-   ────────────────┐       │                                            │
-   x, res, γ₁,β₁,  │       │   ┌────────────┐   norm_input_bram (1W/1R) │
+   DRAM (AXI4-Full)        │  ffn_block_zynq  (D=2048, M=32, NUM_COLS)   |
+   ────────────────┐       │                                             │
+   x, res, γ₁,β₁,  │       │   ┌────────────┐   norm_input_bram (1W/1R)  |
    γ₂,β₂, W_up,    ├─AR/R─▶│   │  add_dyt   │──y_in───────────┐         │
    W_down          ◀───────│   │  _stage    │──z₁─residual_bram│        │
                            │   └────────────┘                 ▼         │
@@ -445,55 +445,5 @@ edge/real-time inference.
 
 ---
 
-## 5. File listing
 
-| File | Purpose |
-|------|---------|
-| `ffn_block_zynq.v` | Top-level — phase controller, AXI mux, BRAM instantiation, sub-module wiring |
-| `add_dyt_stage.v` | Pre-DyT: AXI fetch → parallel add → α·z → tanh LUT → γ·tanh+β → write BRAMs |
-| `add_dyt_post.v` | Post-DyT: read ffn/res BRAMs → add → α·z → tanh → γ·tanh+β → stream out |
-| `tanh_lut.v` | BRAM-based tanh ROM with ±4.0 saturation and odd symmetry |
-| `fetch_addr_gen_dyt.v` | Generates (input, weight) tile pairs for UP and DOWN phases from norm_bram / relu_bram / AXI weights |
-| `tm_proj_stage.v` | Time-multiplexed projection stage (NUM_COLS parallel columns, accumulator, saturating output) |
-| `mul_col.v` | One column's multiply-add (M multipliers + pipelined adder tree) |
-| `adder_tree.v` | Pipelined binary adder tree (Vivado-safe flat layout) |
-| `relu_stage.v` | Element-wise ReLU (parallel M comparators) + relu_bram write |
-| `accumulator.v` | Collects down-projection result tiles into ffn_output_bram; optional readout FSM |
-| `axi_read_master.v` | Single-burst AXI4 read master with ready/valid handshaking |
-| `bram_dp.v` / `bram_dp_wide.v` | Inferable dual-port BRAMs (narrow / wide word) |
-| `gen_tanh_lut.py` | Offline generator for `tanh_lut_init.hex` |
-| `tanh_lut_init.hex` | 1024-entry × 16b Q8.8 tanh ROM image |
-| `verify_fix.py` | Numerical self-check of fixed-point MAC pipeline |
-| `BUG_REPORT.md` | Debug report of the issues found and fixed |
 
-## 6. Integration notes
-
-1. **Clock/resets:** Single `clk` domain, active-low synchronous reset
-   `rst_n`. All FSMs and pipeline registers use the same clock.
-2. **AXI hookup:** Connect `ar*` and `r*` directly to the Zynq PS AXI HP port
-   (or an AXI interconnect). Burst size/len are set per-tile.
-3. **Memory initialization:** Ensure `tanh_lut_init.hex` is on Vivado's
-   simulation/synthesis file set (add as design source, type "Memory
-   Initialization File").
-4. **α/γ/β training:** α is per-layer scalar (default 1.0 = Q8.8 `0x0100`);
-   γ and β are per-channel vectors initialized to 1.0 / 0.0 respectively
-   (identity DyT). After training, load them via DRAM at the documented
-   base addresses.
-5. **Stacking layers:** The streaming `out_data/out_addr/out_valid/out_last`
-   from post-DyT connects directly to the input `x` stream of the next
-   layer (with `res` wired from the previous attention residual path).
-6. **Synthesis:** In Vivado, enable `retiming` and set DSP utilization to
-   `Auto`; the `(* ram_style = "block" *)` attributes guide BRAM inference.
-   Verify inferred BRAMs in the synthesized schematic — tanh_lut.lut_mem,
-   bram_dp_wide.mem, bram_dp.mem should all appear as RAMB36E1/RAMB18E1.
-
-## 7. References
-
-- Zhu, X., et al. *Transformers without Normalization*, 2025 — Dynamic Tanh
-  formulation.
-- Vaswani, A., et al. *Attention Is All You Need*, 2017 — Transformer
-  architecture (this design implements the FFN sub-layer).
-- Xilinx, *UltraScale Architecture DSP48E2 Slice User Guide* (UG579) — DSP
-  timing/usage.
-- Xilinx, *Vivado Design Suite User Guide: Synthesis* (UG901) — BRAM
-  inference coding guidelines.

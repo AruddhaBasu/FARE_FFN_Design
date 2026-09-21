@@ -1,0 +1,103 @@
+FOUR-LANE PIPELINED SHARED-WEIGHT FFN ARCHITECTURE
+CALCULATED LATENCY REPORT
+============================================================
+
+NOTE
+----
+The following values are calculated cycle-level latency values. They are
+not full RTL simulation results. The requested large RTL simulations must
+complete before these values can be considered measured simulation results.
+
+CONFIGURATION
+-------------
+d              = 4096
+HIDDEN_DIM     = 11008
+Tile size M    = 32
+Clock          = 500 MHz
+Clock period   = 2 ns
+
+Previous architecture:
+  One sequential lane
+  NUM_COLS = 32
+
+Four-lane architecture:
+  Four concurrent lanes
+  NUM_COLS = 16 per lane
+  Shared weight path
+  Ordered output/reorder stage
+
+DERIVED TILE COUNTS
+--------------------
+D/M          = 4096/32  = 128 tiles
+HIDDEN_DIM/M = 11008/32 = 344 tiles
+
+Each output vector contains:
+  (4096 x 16) / 64 = 1024 output beats
+
+PER-VECTOR STAGE LATENCY
+------------------------
+Previous sequential architecture:
+  Pre-DyT  = 21,890 cycles
+  FFN      = 23,072,781 cycles
+  Post-DyT = 20,993 cycles
+  Total    = 23,115,664 cycles
+
+Four-lane architecture, per lane:
+  Pre-DyT  = 21,890 cycles
+  FFN      = 23,072,789 cycles
+  Post-DyT = 20,993 cycles
+  Total    = 23,115,672 cycles
+
+PREVIOUS SEQUENTIAL ARCHITECTURE
+--------------------------------
+Formula:
+  L_previous = N x (L_pre + L_ffn + L_post) + (N - 1)
+
+| N    | Pre-DyT cycles | FFN cycles  | Post-DyT cycles | Restart cycles | Total cycles  | Total latency |
+|------|----------------|-------------|-----------------|----------------|---------------|---------------|
+| 640  | 14,009,600     | 14,766,579,840 | 13,435,520  | 639            | 14,794,025,599 | 29.588051198 s |
+| 1,152| 25,217,280     | 26,579,843,712 | 24,183,936  | 1,151          | 26,629,246,079 | 53.258492158 s |
+| 1,664| 36,424,960     | 38,393,107,584 | 34,932,352  | 1,663          | 38,464,466,559 | 76.928933118 s |
+| 1,024| 22,415,360     | 23,626,527,744 | 21,496,832  | 1,023          | 23,670,440,959 | 47.340881918 s |
+| 1,536| 33,623,040     | 35,439,791,616 | 32,245,248  | 1,535          | 35,505,661,439 | 71.011322878 s |
+| 2,048| 44,830,720     | 47,253,055,488 | 42,993,664  | 2,047          | 47,340,881,919 | 94.681763838 s |
+
+FOUR-LANE PIPELINED SHARED-WEIGHT ARCHITECTURE
+-----------------------------------------------
+Number of lane groups:
+  G = ceil(N / 4)
+
+The calculated four-lane latency includes:
+  - One Pre-DyT phase per lane group
+  - One FFN phase per lane group
+  - One Post-DyT phase per lane group
+  - 1024 output reorder/serialization cycles per vector
+  - One restart cycle between lane groups
+
+Formula:
+  L_four_lane = G x (L_pre + L_ffn + L_post)
+                 + N x 1024 + (G - 1)
+
+| N    | Groups | Pre-DyT cycles | FFN cycles | Post-DyT cycles | Reorder cycles | Restart cycles | Total cycles  | Total latency |
+|------|--------|----------------|------------|-----------------|----------------|----------------|---------------|---------------|
+| 640  | 160    | 3,502,400      | 3,691,646,240 | 3,358,880  | 655,360        | 159            | 3,699,163,039 | 7.398326078 s |
+| 1,152| 288    | 6,304,320      | 6,644,963,232 | 6,045,984  | 1,179,648      | 287            | 6,658,493,471 | 13.316986942 s |
+| 1,664| 416    | 9,106,240      | 9,598,280,224 | 8,733,088  | 1,703,936      | 415            | 9,617,823,903 | 19.235647806 s |
+| 1,024| 256    | 5,603,840      | 5,906,633,984 | 5,374,208  | 1,048,576      | 255            | 5,918,660,863 | 11.837321726 s |
+| 1,536| 384    | 8,405,760      | 8,859,950,976 | 8,061,312  | 1,572,864      | 383            | 8,877,991,295 | 17.755982590 s |
+| 2,048| 512    | 11,207,680     | 11,813,267,968 | 10,748,416 | 2,097,152    | 511            | 11,837,321,727 | 23.674643454 s |
+
+COMPARISON
+----------
+| N    | Previous latency | Four-lane latency | Approximate improvement |
+|------|------------------|-------------------|-------------------------|
+| 640  | 29.588051198 s   | 7.398326078 s     | 4.00x                   |
+| 1,152| 53.258492158 s   | 13.316986942 s    | 4.00x                   |
+| 1,664| 76.928933118 s   | 19.235647806 s    | 4.00x                   |
+| 1,024| 47.340881918 s   | 11.837321726 s    | 4.00x                   |
+| 1,536| 71.011322878 s   | 17.755982590 s    | 4.00x                   |
+| 2,048| 94.681763838 s   | 23.674643454 s    | 4.00x                   |
+
+These values assume sufficient memory bandwidth and no stalls in shared
+weight-tile delivery. They must not be presented as measured RTL simulation
+results until the full large-configuration simulations complete.
